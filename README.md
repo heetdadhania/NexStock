@@ -1,44 +1,50 @@
 # NexStock
 
-> Warehouse Inventory Management Platform
+> Multi-Warehouse Operations Platform
 
-A full-stack warehouse management system for tracking products, categories, inventory levels, stock movements, and operational analytics through a professional SaaS-style dashboard.
+A full-stack warehouse operations management platform for managing multiple warehouses, suppliers, purchase orders, inventory transfers, stock movements, and operational analytics through a professional SaaS-style dashboard.
 
 ---
 
 ## Features
 
-- **Authentication** — JWT-based login with role-based access (Admin, Manager)
-- **Category Management** — Full CRUD with uniqueness validation and delete guard
-- **Product Management** — SKU-based products with soft delete and auto inventory creation
-- **Inventory Management** — Stock In/Out with movement tracking and low stock alerts
-- **Dashboard** — KPI cards, inventory trend chart, low stock widget, recent activity
-- **Reports** — Inventory, stock movement, and low stock reports with CSV export
-- **Profile** — View current user info
+* **Authentication** — JWT-based login with role-based access (Admin, Manager)
+* **Warehouse Management** — Create, update, and manage multiple warehouse locations
+* **Supplier Management** — Supplier records, contact information, and performance tracking
+* **Purchase Orders** — Draft, approve, receive, and cancel purchase orders
+* **Inventory Transfers** — Transfer products between warehouses with status tracking
+* **Warehouse Inventory** — Track inventory separately for each warehouse
+* **Activity Logs** — System-wide activity tracking and audit history
+* **Dashboard** — KPI cards, warehouse analytics, transfer metrics, and operational insights
+* **Reports** — Warehouse inventory, supplier, purchase order, and transfer reports
+* **Profile** — View current user information
 
 ---
 
 ## Tech Stack
 
 **Frontend**
-- React · TypeScript · Vite
-- Tailwind CSS · Shadcn/UI
-- Axios · React Hook Form · Zod · Recharts
+
+* React · TypeScript · Vite
+* Tailwind CSS · Shadcn/UI
+* Axios · React Hook Form · Zod · Recharts
 
 **Backend**
-- Python · FastAPI · SQLAlchemy · Pydantic v2
-- Alembic · JWT · Passlib (bcrypt)
+
+* Python · FastAPI · SQLAlchemy · Pydantic v2
+* Alembic · JWT · Passlib (bcrypt)
 
 **Infrastructure**
-- PostgreSQL — Neon
-- Frontend — Vercel
-- Backend — Railway
+
+* PostgreSQL — Neon
+* Frontend — Vercel
+* Backend — Railway
 
 ---
 
 ## Project Structure
 
-```
+```text
 nexstock/
 ├── backend/
 │   ├── app/
@@ -70,9 +76,9 @@ nexstock/
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL database (Neon recommended)
+* Python 3.11+
+* Node.js 18+
+* PostgreSQL database (Neon recommended)
 
 ### 1. Clone the repository
 
@@ -144,38 +150,70 @@ App available at `http://localhost:5173`
 
 ## Database Schema
 
-```
-roles          → id, name
-users          → id, name, email, password_hash, role_id, is_active
-categories     → id, name, description
-products       → id, sku (unique), name, category_id, unit_price, is_active
-inventory      → id, product_id (unique), current_quantity, minimum_quantity, maximum_quantity
-stock_movements → id, product_id, movement_type (IN/OUT), quantity, remarks, created_by
+```text
+roles
+
+users
+
+categories
+
+products
+
+inventory
+
+stock_movements
+
+warehouses
+→ id, warehouse_code, warehouse_name, city, state, country
+
+warehouse_inventory
+→ id, warehouse_id, product_id, quantity, minimum_quantity, maximum_quantity
+
+suppliers
+→ id, supplier_code, supplier_name, contact_person, email, phone
+
+purchase_orders
+→ id, po_number, supplier_id, warehouse_id, status
+
+purchase_order_items
+→ id, purchase_order_id, product_id, quantity, unit_price
+
+inventory_transfers
+→ id, transfer_number, source_warehouse_id, destination_warehouse_id, status
+
+inventory_transfer_items
+→ id, transfer_id, product_id, quantity
+
+activity_logs
+→ id, user_id, action, entity_type, entity_id, created_at
 ```
 
 ---
 
 ## API Reference
 
-| Module | Method | Endpoint |
-|--------|--------|----------|
-| Auth | POST | /api/auth/login |
-| Auth | GET | /api/auth/me |
-| Categories | GET/POST | /api/categories |
-| Categories | PUT/DELETE | /api/categories/{id} |
-| Products | GET/POST | /api/products |
-| Products | PUT/DELETE | /api/products/{id} |
-| Inventory | GET | /api/inventory |
-| Inventory | POST | /api/inventory/stock-in |
-| Inventory | POST | /api/inventory/stock-out |
-| Inventory | GET | /api/inventory/movements |
-| Dashboard | GET | /api/dashboard/stats |
-| Dashboard | GET | /api/dashboard/inventory-trend |
-| Dashboard | GET | /api/dashboard/low-stock |
-| Reports | GET | /api/reports/inventory |
-| Reports | GET | /api/reports/stock-movements |
-| Reports | GET | /api/reports/low-stock |
-| Reports | GET | /api/reports/export/{type} |
+| Module          | Method   | Endpoint                          |
+| --------------- | -------- | --------------------------------- |
+| Auth            | POST     | /api/auth/login                   |
+| Auth            | GET      | /api/auth/me                      |
+| Warehouses      | GET/POST | /api/warehouses                   |
+| Warehouses      | PUT      | /api/warehouses/{id}              |
+| Suppliers       | GET/POST | /api/suppliers                    |
+| Suppliers       | PUT      | /api/suppliers/{id}               |
+| Purchase Orders | GET/POST | /api/purchase-orders              |
+| Purchase Orders | POST     | /api/purchase-orders/{id}/approve |
+| Purchase Orders | POST     | /api/purchase-orders/{id}/receive |
+| Purchase Orders | POST     | /api/purchase-orders/{id}/cancel  |
+| Transfers       | GET/POST | /api/transfers                    |
+| Transfers       | POST     | /api/transfers/{id}/approve       |
+| Transfers       | POST     | /api/transfers/{id}/complete      |
+| Transfers       | POST     | /api/transfers/{id}/cancel        |
+| Activity Logs   | GET      | /api/activity-logs                |
+| Dashboard       | GET      | /api/dashboard                    |
+| Reports         | GET      | /api/reports/warehouse-inventory  |
+| Reports         | GET      | /api/reports/suppliers            |
+| Reports         | GET      | /api/reports/purchase-orders      |
+| Reports         | GET      | /api/reports/transfers            |
 
 Full interactive docs at `/docs` (Swagger UI).
 
@@ -183,28 +221,29 @@ Full interactive docs at `/docs` (Swagger UI).
 
 ## User Roles
 
-| Permission | Admin | Manager |
-|------------|:-----:|:-------:|
-| Manage Categories | ✅ | ✅ |
-| Manage Products | ✅ | ✅ |
-| Manage Inventory | ✅ | ✅ |
-| View Dashboard | ✅ | ✅ |
-| View Reports | ✅ | ✅ |
-| Delete Categories | ✅ | ❌ |
-| Manage Users | ✅ | ❌ |
+| Permission             | Admin | Manager |
+| ---------------------- | :---: | :-----: |
+| Manage Warehouses      |   ✅   |    ❌    |
+| Manage Suppliers       |   ✅   |    ❌    |
+| Manage Purchase Orders |   ✅   |    ✅    |
+| Manage Transfers       |   ✅   |    ✅    |
+| Manage Inventory       |   ✅   |    ✅    |
+| View Dashboard         |   ✅   |    ✅    |
+| View Reports           |   ✅   |    ✅    |
+| View Activity Logs     |   ✅   |    ❌    |
 
 ---
 
 ## Roadmap
 
-| Version | Name | Status |
-|---------|------|--------|
-| v1.0.0 | Core Warehouse Management | ✅ Completed |
-| v2.0.0 | Multi-Warehouse Operations | Planned |
-| v3.0.0 | Intelligence Analytics | Planned |
-| v4.0.0 | Warehouse Optimization | Planned |
-| v5.0.0 | Digital Twin Warehouse | Planned |
-| v6.0.0 | AI Warehouse Commander | Planned |
+| Version | Name                       | Status      |
+| ------- | -------------------------- | ----------- |
+| v1.0.0  | Core Warehouse Management  | ✅ Completed |
+| v2.0.0  | Multi-Warehouse Operations | ✅ Completed |
+| v3.0.0  | Intelligence Analytics     | Planned     |
+| v4.0.0  | Warehouse Optimization     | Planned     |
+| v5.0.0  | Digital Twin Warehouse     | Planned     |
+| v6.0.0  | AI Warehouse Commander     | Planned     |
 
 ---
 
@@ -221,4 +260,3 @@ Full interactive docs at `/docs` (Swagger UI).
 ## License
 
 This project is licensed under the MIT License.
-#
