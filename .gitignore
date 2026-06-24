@@ -1,12 +1,15 @@
 # Environment
 .env
 .env.*
+!.env.example
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
+.mypy_cache/
 
 # Virtual Environments
 .venv/

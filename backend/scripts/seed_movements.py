@@ -1,83 +1,163 @@
+"""
+seed_movements.py
+-----------------
+Seeds 150+ stock movements chronologically across all 30 products.
+Alternates IN and OUT, ensuring no OUT movement drives stock levels below zero.
+"""
+import logging
 import random
+import sys
+import os
 from datetime import datetime, timedelta
-from typing import List
+from sqlalchemy.orm import Session
+
+# Add project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.db.base import SessionLocal
 from app.models.product import Product
-from app.models.stock_movement import StockMovement, MovementType
-from app.models.inventory import Inventory
 from app.models.user import User
+from app.models.stock_movement import StockMovement, MovementType
+
+logger = logging.getLogger(__name__)
 
 
-def _random_date(days: int = 90) -> datetime:
-    """Return a random datetime within the past ``days`` days."""
-    return datetime.utcnow() - timedelta(days=random.randint(0, days))
-
-
-def run() -> None:
-    """Seed the stock_movements table with >=150 movements.
-
-    - Randomly selects a product, movement type (IN/OUT), quantity, date and creator.
-    - Updates the related Inventory.current_quantity accordingly.
-    - Ensures inventory adjustments never go negative.
+def seed_movements(db: Session) -> None:
     """
-    MOVEMENT_COUNT = 150
-    with SessionLocal() as db:
+    Seeds stock movements.
+    """
+    logger.info("Starting stock movements seeding...")
+
+    # Check idempotency
+    existing_count = db.query(StockMovement).count()
+    if existing_count >= 150:
+        logger.info("Database already contains %d stock movements, skipping.", existing_count)
+        return
+
+    products = db.query(Product).all()
+    if not products:
+        raise RuntimeError("No products found in database. Run seed_products first.")
+
+    users = db.query(User).all()
+    if not users:
+        raise RuntimeError("No users found in database. Run seed_users first.")
+
+    # Alternate users
+    admin_user = next((u for u in users if u.role_rel.name == "Admin"), users[0])
+    manager_role_user = next((u for u in users if u.role_rel.name == "Manager"), users[-1])
+
+    remarks_in = [
+        "Initial stock provisioning",
+        "Purchase order received",
+        "Stock adjustment - surplus found",
+        "Returned from client",
+        "Transfer fulfillment in",
+    ]
+    remarks_out = [
+        "Dispatched to client",
+        "Damaged goods write-off",
+        "Stock adjustment - shrinkage",
+        "Internal project consumption",
+        "Transfer fulfillment out",
+    ]
+
+    # Generate movements raw data first, then sort chronologically
+    raw_movements = []
+    now = datetime.utcnow()
+
+    # Track running total during generation to be safe, per product
+    # Each product starts at 0 before movements (we will overwrite/initialize)
+    running_stock = {p.id: 0 for p in products}
+
+    # Generate about 6 movements per product -> 180 total
+    for product in products:
+        # First movement is always IN to avoid starting with OUT (which would be 0)
+        p_id = product.id
+        start_time = now - timedelta(days=88)
+
+        # Generate timestamps
+        times = []
+        curr_time = start_time
+        for _ in range(6):
+            curr_time += timedelta(days=random.randint(5, 12), hours=random.randint(0, 12))
+            if curr_time >= now:
+                curr_time = now - timedelta(hours=1)
+            times.append(curr_time)
+
+        # Sort times to be chronological
+        times.sort()
+
+        # Alternate IN/OUT
+        m_type = MovementType.IN
+        for t in times:
+            qty = random.randint(10, 100)
+            if m_type == MovementType.IN:
+                running_stock[p_id] += qty
+                remark = random.choice(remarks_in)
+                raw_movements.append({
+                    "product_id": p_id,
+                    "movement_type": m_type,
+                    "quantity": qty,
+                    "remarks": remark,
+                    "created_at": t
+                })
+                m_type = MovementType.OUT
+            else:
+                # OUT movement: enforce no negative inventory
+                available = running_stock[p_id]
+                if available > 0:
+                    qty = min(qty, available)
+                    running_stock[p_id] -= qty
+                    remark = random.choice(remarks_out)
+                    raw_movements.append({
+                        "product_id": p_id,
+                        "movement_type": m_type,
+                        "quantity": qty,
+                        "remarks": remark,
+                        "created_at": t
+                    })
+                m_type = MovementType.IN
+
+    # Sort all movements chronologically across all products
+    raw_movements.sort(key=lambda m: m["created_at"])
+
+    # Now insert chronologically
+    logger.info("Inserting %d chronological stock movements...", len(raw_movements))
+    for idx, mov in enumerate(raw_movements):
         try:
-            # Load required data
-            products: List[Product] = db.query(Product).all()
-            if not products:
-                print("[-] No products found – seed products first.")
-                return
-
-            users: List[User] = db.query(User).filter(User.email.in_(["admin@nexstock.com", "manager@nexstock.com"]))
-            users = users.all()
-            if len(users) < 2:
-                raise RuntimeError("Admin and manager users must exist before seeding movements.")
-            user_ids = [u.id for u in users]
-
-            for _ in range(MOVEMENT_COUNT):
-                product = random.choice(products)
-                movement_type = random.choice([MovementType.IN, MovementType.OUT])
-                quantity = random.randint(1, 100)
-                remarks = (
-                    f"Purchase order #{random.randint(1000, 9999)}"
-                    if movement_type == MovementType.IN
-                    else f"Dispatch to warehouse {random.choice(['A', 'B', 'C'])}"
-                )
-                movement = StockMovement(
-                    product_id=product.id,
-                    movement_type=movement_type,
-                    quantity=quantity,
-                    remarks=remarks,
-                    created_by=random.choice(user_ids),
-                    created_at=_random_date(),
-                )
-                db.add(movement)
-
-                # Update inventory
-                inventory = db.query(Inventory).filter(Inventory.product_id == product.id).first()
-                if not inventory:
-                    # Create a default inventory record if missing
-                    inventory = Inventory(
-                        product_id=product.id,
-                        current_quantity=0,
-                        minimum_quantity=5,
-                        maximum_quantity=500,
-                    )
-                    db.add(inventory)
-
-                if movement_type == MovementType.IN:
-                    inventory.current_quantity += quantity
-                else:
-                    inventory.current_quantity = max(inventory.current_quantity - quantity, 0)
-
-            db.commit()
-            print(f"[+] Seeded {MOVEMENT_COUNT} stock movements successfully.")
+            # Alternate creator between admin and manager
+            created_by = admin_user.id if idx % 2 == 0 else manager_role_user.id
+            db_mov = StockMovement(
+                product_id=mov["product_id"],
+                movement_type=mov["movement_type"],
+                quantity=mov["quantity"],
+                remarks=mov["remarks"],
+                created_by=created_by,
+                created_at=mov["created_at"]
+            )
+            db.add(db_mov)
+            # Flush periodically or commit at the end
         except Exception as e:
             db.rollback()
-            print(f"[-] Error seeding stock movements: {e}")
+            logger.error("Failed to insert stock movement index %d: %s", idx, e)
             raise
 
+    try:
+        db.commit()
+        logger.info("Successfully seeded %d stock movements.", len(raw_movements))
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to commit stock movements: %s", e)
+        raise
+
+
 if __name__ == "__main__":
-    run()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    db = SessionLocal()
+    try:
+        seed_movements(db)
+    finally:
+        db.close()

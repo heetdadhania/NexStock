@@ -76,6 +76,12 @@ from app.api.inventory import router as inventory_router
 from app.api.dashboard import router as dashboard_router
 from app.api.reports import router as reports_router
 from app.api.auth import router as auth_router
+from app.api.warehouses import router as warehouses_router
+from app.api.warehouse_inventory import router as warehouse_inventory_router
+from app.api.suppliers import router as suppliers_router
+from app.api.purchase_orders import router as purchase_orders_router
+from app.api.inventory_transfers import router as inventory_transfers_router
+from app.api.activity_logs import router as activity_logs_router
 
 app.include_router(categories_router, prefix="/api")
 app.include_router(products_router, prefix="/api")
@@ -83,6 +89,14 @@ app.include_router(inventory_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(warehouses_router, prefix="/api")
+app.include_router(warehouse_inventory_router, prefix="/api")
+app.include_router(suppliers_router, prefix="/api")
+app.include_router(purchase_orders_router, prefix="/api")
+app.include_router(inventory_transfers_router, prefix="/api")
+app.include_router(activity_logs_router, prefix="/api")
+
+
 
 
 # Startup Event: Seed default data (roles, admin user)

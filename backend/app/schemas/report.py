@@ -44,3 +44,59 @@ class LowStockReportItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# V2 Report Schemas
+# ---------------------------------------------------------------------------
+
+class WarehouseInventoryReportItem(BaseModel):
+    warehouse_name: str
+    product_name: str
+    sku: str
+    quantity: int
+    minimum_quantity: int
+    maximum_quantity: int
+    is_low_stock: bool
+
+    class Config:
+        from_attributes = True
+
+
+class SupplierReportItem(BaseModel):
+    supplier_code: str
+    supplier_name: str
+    email: str
+    rating: Optional[float] = None
+    is_active: bool
+    total_orders: int
+    total_value: Decimal
+
+    class Config:
+        from_attributes = True
+
+
+class PurchaseOrderReportItem(BaseModel):
+    po_number: str
+    supplier_name: str
+    warehouse_name: str
+    status: str
+    order_date: datetime
+    item_count: int
+    total_value: Decimal
+
+    class Config:
+        from_attributes = True
+
+
+class TransferReportItem(BaseModel):
+    transfer_number: str
+    source_warehouse: str
+    destination_warehouse: str
+    status: str
+    created_at: datetime
+    item_count: int
+
+    class Config:
+        from_attributes = True
+

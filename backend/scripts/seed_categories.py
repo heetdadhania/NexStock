@@ -1,15 +1,28 @@
+"""
+seed_categories.py
+------------------
+Seeds default product categories in the database.
+"""
+import logging
 import sys
-from typing import List
-
+import os
 from sqlalchemy.orm import Session
+
+# Add project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.db.base import SessionLocal
 from app.models.category import Category
 
+logger = logging.getLogger(__name__)
 
-def run() -> None:
-    """Seed the categories table with the required 10 categories."""
-    categories: List[str] = [
+
+def seed_categories(db: Session) -> None:
+    """
+    Seeds default product categories.
+    """
+    logger.info("Starting category seeding...")
+    categories_to_seed = [
         "Electronics",
         "Raw Materials",
         "Packaging",
@@ -21,22 +34,33 @@ def run() -> None:
         "Spare Parts",
         "Consumables",
     ]
-    with SessionLocal() as db:
+
+    for name in categories_to_seed:
         try:
-            for name in categories:
-                existing = db.query(Category).filter(Category.name == name).first()
-                if existing:
-                    print(f"[+] Category '{name}' already exists, skipping.")
-                    continue
-                cat = Category(name=name, description=f"Category for {name.lower()}.")
-                db.add(cat)
-                print(f"[*] Adding category '{name}'.")
-            db.commit()
-            print("[+] Categories seeding completed.")
+            existing = db.query(Category).filter(Category.name == name).first()
+            if not existing:
+                category = Category(
+                    name=name,
+                    description=f"Standard warehouse storage category for {name.lower()}."
+                )
+                db.add(category)
+                db.commit()
+                logger.info("Seeded category: %s", name)
+            else:
+                logger.info("Category '%s' already exists, skipping.", name)
         except Exception as e:
             db.rollback()
-            print(f"[-] Error seeding categories: {e}")
+            logger.error("Failed to seed category '%s': %s", name, e)
             raise
 
+
 if __name__ == "__main__":
-    run()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    db = SessionLocal()
+    try:
+        seed_categories(db)
+    finally:
+        db.close()

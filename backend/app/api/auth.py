@@ -6,7 +6,7 @@ from app.core.response import success_response
 from app.core.security import create_access_token
 from app.db.base import get_db
 from app.repositories.user_repository import user_repository
-from app.schemas.auth import LoginRequest, TokenResponse, UserOut
+from app.schemas.auth import LoginRequest, UserOut
 from app.services.auth_service import auth_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])

@@ -11,6 +11,10 @@ from app.schemas.report import (
     InventoryReportItem,
     LowStockReportItem,
     StockMovementReportItem,
+    WarehouseInventoryReportItem,
+    SupplierReportItem,
+    PurchaseOrderReportItem,
+    TransferReportItem,
 )
 from app.services.report_service import report_service
 
@@ -129,4 +133,160 @@ def export_low_stock_csv(
     """
     generator = report_service.export_low_stock_csv(db)
     headers = {"Content-Disposition": 'attachment; filename="low_stock_report.csv"'}
+    return StreamingResponse(generator, media_type="text/csv", headers=headers)
+
+
+# ---------------------------------------------------------------------------
+# V2 Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/warehouse-inventory", response_model=dict)
+def get_warehouse_inventory_report(
+    warehouse_id: Optional[int] = Query(None, description="Filter by warehouse ID"),
+    low_stock_only: bool = Query(False, description="Return only low-stock records"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """
+    Returns per-warehouse product inventory with low-stock flag.
+    Protected: Requires valid JWT.
+    """
+    items = report_service.get_warehouse_inventory_report(
+        db, warehouse_id=warehouse_id, low_stock_only=low_stock_only
+    )
+    serialized = [WarehouseInventoryReportItem.model_validate(i) for i in items]
+    return success_response(data=serialized, message="Warehouse inventory report compiled successfully")
+
+
+@router.get("/suppliers", response_model=dict)
+def get_supplier_report(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """
+    Returns all suppliers with total PO count and total received-PO value.
+    Protected: Requires valid JWT.
+    """
+    items = report_service.get_supplier_report(db)
+    serialized = [SupplierReportItem.model_validate(i) for i in items]
+    return success_response(data=serialized, message="Supplier report compiled successfully")
+
+
+@router.get("/purchase-orders", response_model=dict)
+def get_purchase_order_report(
+    status: Optional[str] = Query(None, description="Filter by PO status"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier ID"),
+    warehouse_id: Optional[int] = Query(None, description="Filter by warehouse ID"),
+    from_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    to_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """
+    Returns purchase orders with supplier/warehouse names and aggregated values.
+    Protected: Requires valid JWT.
+    """
+    items = report_service.get_purchase_order_report(
+        db, status=status, supplier_id=supplier_id,
+        warehouse_id=warehouse_id, from_date=from_date, to_date=to_date,
+    )
+    serialized = [PurchaseOrderReportItem.model_validate(i) for i in items]
+    return success_response(data=serialized, message="Purchase orders report compiled successfully")
+
+
+@router.get("/transfers", response_model=dict)
+def get_transfer_report(
+    status: Optional[str] = Query(None, description="Filter by transfer status"),
+    source_warehouse_id: Optional[int] = Query(None, description="Filter by source warehouse ID"),
+    destination_warehouse_id: Optional[int] = Query(None, description="Filter by destination warehouse ID"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """
+    Returns inventory transfers with warehouse names, status, and item count.
+    Protected: Requires valid JWT.
+    """
+    items = report_service.get_transfer_report(
+        db, status=status,
+        source_warehouse_id=source_warehouse_id,
+        destination_warehouse_id=destination_warehouse_id,
+    )
+    serialized = [TransferReportItem.model_validate(i) for i in items]
+    return success_response(data=serialized, message="Transfers report compiled successfully")
+
+
+# V2 CSV Exports
+
+@router.get("/export/warehouse-inventory")
+def export_warehouse_inventory_csv(
+    warehouse_id: Optional[int] = Query(None, description="Filter by warehouse ID"),
+    low_stock_only: bool = Query(False, description="Return only low-stock records"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    Downloads warehouse inventory report as a CSV file attachment.
+    Protected: Requires valid JWT.
+    """
+    generator = report_service.export_warehouse_inventory_csv(
+        db, warehouse_id=warehouse_id, low_stock_only=low_stock_only
+    )
+    headers = {"Content-Disposition": 'attachment; filename="warehouse_inventory_report.csv"'}
+    return StreamingResponse(generator, media_type="text/csv", headers=headers)
+
+
+@router.get("/export/suppliers")
+def export_supplier_csv(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    Downloads supplier report as a CSV file attachment.
+    Protected: Requires valid JWT.
+    """
+    generator = report_service.export_supplier_csv(db)
+    headers = {"Content-Disposition": 'attachment; filename="suppliers_report.csv"'}
+    return StreamingResponse(generator, media_type="text/csv", headers=headers)
+
+
+@router.get("/export/purchase-orders")
+def export_purchase_orders_csv(
+    status: Optional[str] = Query(None, description="Filter by PO status"),
+    supplier_id: Optional[int] = Query(None, description="Filter by supplier ID"),
+    warehouse_id: Optional[int] = Query(None, description="Filter by warehouse ID"),
+    from_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    to_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    Downloads purchase orders report as a CSV file attachment.
+    Protected: Requires valid JWT.
+    """
+    generator = report_service.export_purchase_orders_csv(
+        db, status=status, supplier_id=supplier_id,
+        warehouse_id=warehouse_id, from_date=from_date, to_date=to_date,
+    )
+    headers = {"Content-Disposition": 'attachment; filename="purchase_orders_report.csv"'}
+    return StreamingResponse(generator, media_type="text/csv", headers=headers)
+
+
+@router.get("/export/transfers")
+def export_transfers_csv(
+    status: Optional[str] = Query(None, description="Filter by transfer status"),
+    source_warehouse_id: Optional[int] = Query(None, description="Filter by source warehouse ID"),
+    destination_warehouse_id: Optional[int] = Query(None, description="Filter by destination warehouse ID"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    Downloads inventory transfers report as a CSV file attachment.
+    Protected: Requires valid JWT.
+    """
+    generator = report_service.export_transfers_csv(
+        db, status=status,
+        source_warehouse_id=source_warehouse_id,
+        destination_warehouse_id=destination_warehouse_id,
+    )
+    headers = {"Content-Disposition": 'attachment; filename="transfers_report.csv"'}
     return StreamingResponse(generator, media_type="text/csv", headers=headers)

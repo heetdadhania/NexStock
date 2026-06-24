@@ -7,6 +7,11 @@ from app.repositories.category_repository import category_repository
 from app.repositories.inventory_repository import inventory_repository
 from app.repositories.product_repository import product_repository
 from app.repositories.stock_movement_repository import stock_movement_repository
+from app.repositories.warehouse_repository import warehouse_repository
+from app.repositories.supplier_repository import supplier_repository
+from app.repositories.purchase_order_repository import purchase_order_repository
+from app.repositories.inventory_transfer_repository import inventory_transfer_repository
+from app.repositories.warehouse_inventory_repository import warehouse_inventory_repository
 
 
 class DashboardService:
@@ -91,6 +96,90 @@ class DashboardService:
                 "created_by_name": f"User #{m.created_by}",
             }
             for m in movements
+        ]
+
+    def get_v2_stats(self, db: Session) -> Dict[str, int]:
+        """
+        Retrieves stats for total warehouses, total suppliers, open POs, pending transfers,
+        total inventory quantity, and low stock count across warehouses.
+        """
+        return {
+            "total_warehouses": warehouse_repository.count(db),
+            "total_suppliers": supplier_repository.count(db),
+            "open_purchase_orders": purchase_order_repository.count_open(db),
+            "pending_transfers": inventory_transfer_repository.count_pending(db),
+            "total_inventory_quantity": warehouse_inventory_repository.get_total_quantity(db),
+            "low_stock_count": warehouse_inventory_repository.get_low_stock_count(db),
+        }
+
+    def get_v2_inventory_distribution(self, db: Session) -> List[Dict[str, Any]]:
+        """
+        Aggregates the total quantity of products per warehouse.
+        """
+        warehouses = warehouse_repository.get_all(db)
+        return [
+            {
+                "warehouse_id": w["id"],
+                "warehouse_name": w["warehouse_name"],
+                "total_quantity": w["inventory_count"],
+            }
+            for w in warehouses
+        ]
+
+    def get_v2_po_summary(self, db: Session) -> List[Dict[str, Any]]:
+        """
+        Summarizes purchase orders grouped by status, counting them and calculating total values.
+        """
+        from app.models.purchase_order import PurchaseOrderStatus
+        pos = purchase_order_repository.get_all(db)
+
+        # Initialize summary for all statuses
+        summary = {
+            status.value: {"status": status.value, "count": 0, "total_value": 0.0}
+            for status in PurchaseOrderStatus
+        }
+
+        for po in pos:
+            status_val = po.status.value if hasattr(po.status, "value") else str(po.status)
+            if status_val in summary:
+                summary[status_val]["count"] += 1
+                summary[status_val]["total_value"] += po.total_value
+
+        return list(summary.values())
+
+    def get_v2_transfer_activity(self, db: Session, days: int = 30) -> List[Dict[str, Any]]:
+        """
+        Aggregates daily count of transfers created and completed in the last N days.
+        """
+        from app.models.inventory_transfer import TransferStatus
+        today = date.today()
+        start_date = today - timedelta(days=days - 1)
+
+        # Initialize activity map with 0s for all dates in the range
+        activity_map: Dict[str, Dict[str, int]] = {}
+        for i in range(days):
+            date_str = (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
+            activity_map[date_str] = {"transfers_created": 0, "transfers_completed": 0}
+
+        transfers = inventory_transfer_repository.get_all(db)
+
+        for t in transfers:
+            t_date = t.created_at.date()
+            if start_date <= t_date <= today:
+                t_date_str = t_date.strftime("%Y-%m-%d")
+                if t_date_str in activity_map:
+                    activity_map[t_date_str]["transfers_created"] += 1
+                    status_val = t.status.value if hasattr(t.status, "value") else str(t.status)
+                    if status_val == TransferStatus.completed.value:
+                        activity_map[t_date_str]["transfers_completed"] += 1
+
+        return [
+            {
+                "date": date_str,
+                "transfers_created": vals["transfers_created"],
+                "transfers_completed": vals["transfers_completed"],
+            }
+            for date_str, vals in sorted(activity_map.items())
         ]
 
 

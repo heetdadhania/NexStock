@@ -2,6 +2,8 @@ import React from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
+  Building,
+  Truck,
   Warehouse,
   Package,
   Tags,
@@ -10,6 +12,9 @@ import {
   User,
   Menu,
   X,
+  ClipboardList,
+  ArrowLeftRight,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -28,11 +33,18 @@ export default function DashboardLayout() {
 
   const navigationItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { name: "Warehouses", path: "/warehouses", icon: Building },
+    { name: "Suppliers", path: "/suppliers", icon: Truck },
     { name: "Inventory", path: "/inventory", icon: Warehouse },
     { name: "Products", path: "/products", icon: Package },
     { name: "Categories", path: "/categories", icon: Tags },
+    { name: "Purchase Orders", path: "/purchase-orders", icon: ClipboardList },
+    { name: "Transfers", path: "/transfers", icon: ArrowLeftRight },
     { name: "Reports", path: "/reports", icon: BarChart3 },
+    { name: "Activity", path: "/activity-logs", icon: Activity },
   ];
+
+
 
   const handleLogout = () => {
     logout();

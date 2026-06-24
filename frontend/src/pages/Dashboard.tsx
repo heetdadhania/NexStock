@@ -7,19 +7,40 @@ import type {
   DashboardStats,
   TrendPoint,
   LowStockItem,
-  RecentActivity,
+  V2Stats,
+  WarehouseDistribution,
+  POStatusSummary,
+  TransferActivityPoint,
 } from "@/types/dashboard";
+import type { ActivityLog } from "@/types/activityLog";
 
 import KPICard from "@/components/dashboard/KPICard";
-import InventoryTrendChart from "@/components/dashboard/InventoryTrendChart";
 import LowStockWidget from "@/components/dashboard/LowStockWidget";
 import RecentActivityWidget from "@/components/dashboard/RecentActivityWidget";
+import LowStockWarehouseWidget from "@/components/warehouseInventory/LowStockWarehouseWidget";
+import { warehouseInventoryService } from "@/services/warehouseInventoryService";
+import { activityLogService } from "@/services/activityLogService";
+import type { WarehouseInventoryItem } from "@/types/warehouseInventory";
+
+import V2KPISection from "@/components/dashboard/V2KPISection";
+import WarehouseDistributionChart from "@/components/dashboard/WarehouseDistributionChart";
+import POStatusChart from "@/components/dashboard/POStatusChart";
+import TransferActivityChart from "@/components/dashboard/TransferActivityChart";
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([]);
+  const [lowStockWarehouse, setLowStockWarehouse] = useState<WarehouseInventoryItem[]>([]);
+
+  // V2 Dashboard State
+  const [v2Stats, setV2Stats] = useState<V2Stats | null>(null);
+  const [warehouseDistribution, setWarehouseDistribution] = useState<WarehouseDistribution[]>([]);
+  const [poStatusSummary, setPoStatusSummary] = useState<POStatusSummary[]>([]);
+  const [transferActivity, setTransferActivity] = useState<TransferActivityPoint[]>([]);
+  const [selectedTransferDays, setSelectedTransferDays] = useState<number>(30);
+  const [isTransferLoading, setIsTransferLoading] = useState<boolean>(false);
 
   const [selectedDays, setSelectedDays] = useState<number>(30);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -29,18 +50,38 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      // Parallel data fetching for KPIs, low stock, and recent activity
-      const [statsData, trendData, lowStockData, recentData] = await Promise.all([
+      // Parallel data fetching for all V1 and V2 stats and activity logs
+      const [
+        statsData,
+        trendData,
+        lowStockData,
+        recentData,
+        lowStockWarehouseData,
+        v2StatsData,
+        distributionData,
+        poSummaryData,
+        transferActivityData,
+      ] = await Promise.all([
         dashboardService.getStats(),
         dashboardService.getInventoryTrend(selectedDays),
         dashboardService.getLowStock(),
-        dashboardService.getRecentActivity(),
+        activityLogService.getRecent(10),
+        warehouseInventoryService.getLowStock(),
+        dashboardService.getV2Stats(),
+        dashboardService.getInventoryDistribution(),
+        dashboardService.getPOStatusSummary(),
+        dashboardService.getTransferActivity(selectedTransferDays),
       ]);
 
       setStats(statsData);
       setTrend(trendData);
       setLowStock(lowStockData);
       setRecentActivity(recentData);
+      setLowStockWarehouse(lowStockWarehouseData);
+      setV2Stats(v2StatsData);
+      setWarehouseDistribution(distributionData);
+      setPoStatusSummary(poSummaryData);
+      setTransferActivity(transferActivityData);
     } catch (error: any) {
       showToast("error", error.message || "Failed to load dashboard metrics");
     } finally {
@@ -61,6 +102,19 @@ export default function Dashboard() {
     }
   };
 
+  // Sync transfer fetching when transfer days range changes
+  const loadTransferData = async (days: number) => {
+    setIsTransferLoading(true);
+    try {
+      const activityData = await dashboardService.getTransferActivity(days);
+      setTransferActivity(activityData);
+    } catch (error: any) {
+      showToast("error", error.message || "Failed to load transfer activity data");
+    } finally {
+      setIsTransferLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadDashboardData();
   }, []);
@@ -68,6 +122,11 @@ export default function Dashboard() {
   const handleDaysChange = (days: number) => {
     setSelectedDays(days);
     loadTrendData(days);
+  };
+
+  const handleTransferDaysChange = (days: number) => {
+    setSelectedTransferDays(days);
+    loadTransferData(days);
   };
 
   if (isLoading) {
@@ -79,7 +138,7 @@ export default function Dashboard() {
           <div className="h-3 bg-background rounded w-1/4 mt-2"></div>
         </div>
 
-        {/* KPI Grid Skeleton */}
+        {/* Row 1: V2 KPI Grid Skeleton */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div
@@ -95,34 +154,87 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Chart Skeleton */}
+        {/* Row 2: V1 KPI Grid Skeleton */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="bg-white border border-border p-6 rounded-card shadow-minimal flex items-center space-x-4 h-24"
+            >
+              <div className="p-6 rounded-full bg-background shrink-0 h-12 w-12"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-background rounded w-1/2"></div>
+                <div className="h-5 bg-background rounded w-1/3"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Row 3: Charts Skeleton */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-[350px] flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="h-4 bg-background rounded w-1/3"></div>
+              <div className="h-3 bg-background rounded w-1/4"></div>
+            </div>
+            <div className="h-48 bg-background rounded w-full"></div>
+          </div>
+          <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-[350px] flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="h-4 bg-background rounded w-1/3"></div>
+              <div className="h-3 bg-background rounded w-1/4"></div>
+            </div>
+            <div className="h-48 bg-background rounded w-full"></div>
+          </div>
+        </div>
+
+        {/* Row 4: Transfer Activity Chart Skeleton */}
         <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-80 flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="h-4 bg-background rounded w-1/6"></div>
-            <div className="h-3 bg-background rounded w-1/12"></div>
+          <div className="flex justify-between items-center">
+            <div className="space-y-2 w-1/2">
+              <div className="h-4 bg-background rounded w-1/3"></div>
+              <div className="h-3 bg-background rounded w-1/4"></div>
+            </div>
+            <div className="h-8 bg-background rounded w-28"></div>
           </div>
           <div className="h-48 bg-background rounded w-full"></div>
         </div>
 
-        {/* Widgets Grid Skeleton */}
+        {/* Row 5: Widgets Grid Skeleton */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-72 flex flex-col space-y-4">
-            <div className="h-4 bg-background rounded w-1/4 pb-3 border-b border-border"></div>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-2">
-                <div className="flex justify-between">
-                  <div className="h-3 bg-background rounded w-1/3"></div>
-                  <div className="h-3 bg-background rounded w-1/12"></div>
+          {/* Left: Low Stock Widgets (stacked) */}
+          <div className="space-y-6">
+            <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-[220px] flex flex-col space-y-4">
+              <div className="h-4 bg-background rounded w-1/4 pb-3 border-b border-border"></div>
+              {[1, 2].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-between">
+                    <div className="h-3 bg-background rounded w-1/3"></div>
+                    <div className="h-3 bg-background rounded w-1/12"></div>
+                  </div>
+                  <div className="h-2 bg-background rounded w-full"></div>
                 </div>
-                <div className="h-2 bg-background rounded w-full"></div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-[220px] flex flex-col space-y-4">
+              <div className="h-4 bg-background rounded w-1/4 pb-3 border-b border-border"></div>
+              {[1, 2].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-between">
+                    <div className="h-3 bg-background rounded w-1/3"></div>
+                    <div className="h-3 bg-background rounded w-1/12"></div>
+                  </div>
+                  <div className="h-2 bg-background rounded w-full"></div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-72 flex flex-col space-y-4">
+          {/* Right: Recent Activity Widget */}
+          <div className="bg-white border border-border p-6 rounded-card shadow-minimal h-[460px] flex flex-col space-y-4">
             <div className="h-4 bg-background rounded w-1/4 pb-3 border-b border-border"></div>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex justify-between items-center py-1.5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex justify-between items-center py-1.5 border-b border-background/50">
                 <div className="space-y-1 w-1/2">
                   <div className="h-3 bg-background rounded w-2/3"></div>
                   <div className="h-2 bg-background rounded w-1/3"></div>
@@ -191,7 +303,10 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* KPI Cards Row */}
+      {/* Row 1: V2 KPI Section */}
+      <V2KPISection stats={v2Stats} />
+
+      {/* Row 2: V1 KPI Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <KPICard
@@ -206,25 +321,37 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Trend Chart Row */}
+      {/* Row 3: Inventory Distribution Chart (50%) | PO Status Chart (50%) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <WarehouseDistributionChart data={warehouseDistribution} />
+        <POStatusChart data={poStatusSummary} />
+      </div>
+
+      {/* Row 4: Transfer Activity Chart (full width) */}
       <div className="relative">
-        <InventoryTrendChart
-          data={trend}
-          selectedDays={selectedDays}
-          onDaysChange={handleDaysChange}
+        <TransferActivityChart
+          data={transferActivity}
+          selectedDays={selectedTransferDays}
+          onDaysChange={handleTransferDaysChange}
         />
-        {isChartLoading && (
+        {isTransferLoading && (
           <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center rounded-card">
             <div className="h-8 w-8 border-2 border-primary-accent border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
       </div>
 
-      {/* Low Stock Alerts & Recent Activity Widgets Row */}
+      {/* Row 5: Low Stock Widget (50%) | Recent Activity Widget (50%) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <LowStockWidget items={lowStock} />
-        <RecentActivityWidget activities={recentActivity} />
+        {/* Left 50% - Low Stock stack */}
+        <div className="flex flex-col gap-6">
+          <LowStockWidget items={lowStock} />
+          <LowStockWarehouseWidget items={lowStockWarehouse} />
+        </div>
+        {/* Right 50% - Recent Activity Widget */}
+        <RecentActivityWidget logs={recentActivity} />
       </div>
     </div>
   );
 }
+

@@ -41,3 +41,42 @@ class RecentMovement(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class V2DashboardStats(BaseModel):
+    total_warehouses: int
+    total_suppliers: int
+    open_purchase_orders: int
+    pending_transfers: int
+    total_inventory_quantity: int
+    low_stock_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class WarehouseInventoryDistribution(BaseModel):
+    warehouse_id: int
+    warehouse_name: str
+    total_quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class POStatusSummary(BaseModel):
+    status: str
+    count: int
+    total_value: float
+
+    class Config:
+        from_attributes = True
+
+
+class TransferActivityPoint(BaseModel):
+    date: str  # Format: YYYY-MM-DD
+    transfers_created: int
+    transfers_completed: int
+
+    class Config:
+        from_attributes = True

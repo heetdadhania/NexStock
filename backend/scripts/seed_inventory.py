@@ -1,61 +1,88 @@
+"""
+seed_inventory.py
+-----------------
+Seeds the global inventory table (V1) for all products.
+Ensures at least 5 products have low stock (current_quantity <= minimum_quantity).
+"""
+import logging
 import random
-from typing import List
-
+import sys
+import os
 from sqlalchemy.orm import Session
+
+# Add project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.db.base import SessionLocal
 from app.models.product import Product
 from app.models.inventory import Inventory
 
+logger = logging.getLogger(__name__)
 
-def run() -> None:
-    """Seed the inventory table for all products.
-    Generates random quantities within the required ranges.
-    Ensures at least five products have low stock (current_quantity <= minimum_quantity).
+
+def seed_inventory(db: Session) -> None:
     """
-    with SessionLocal() as db:
+    Seeds global inventory records.
+    """
+    logger.info("Starting inventory seeding...")
+
+    products = db.query(Product).all()
+    if not products:
+        raise RuntimeError("No products found in database. Run seed_products first.")
+
+    # Force low stock for the first 5 items
+    low_stock_target = 5
+    low_stock_count = 0
+
+    for idx, product in enumerate(products):
         try:
-            products: List[Product] = db.query(Product).all()
-            if not products:
-                print("[-] No products found – ensure products are seeded first.")
-                return
+            existing = db.query(Inventory).filter(Inventory.product_id == product.id).first()
+            if not existing:
+                min_qty = random.randint(10, 50)
+                max_qty = random.randint(500, 2000)
 
-            # Determine first 5 products for low‑stock scenario
-            low_stock_products = set(p.id for p in random.sample(products, min(5, len(products))))
-
-            for product in products:
-                # Check if inventory already exists for this product
-                existing = db.query(Inventory).filter(Inventory.product_id == product.id).first()
-                if existing:
-                    print(f"[+] Inventory for product ID {product.id} already exists, skipping.")
-                    continue
-
-                # Generate quantities
-                if product.id in low_stock_products:
-                    # Low stock: current <= minimum
-                    minimum_quantity = random.randint(5, 50)
-                    current_quantity = random.randint(0, minimum_quantity)  # could be zero
+                if low_stock_count < low_stock_target:
+                    # Low stock condition
+                    current_qty = random.randint(0, min_qty)
+                    low_stock_count += 1
                 else:
-                    minimum_quantity = random.randint(5, 50)
-                    current_quantity = random.randint(minimum_quantity + 1, 500)
-                maximum_quantity = random.randint(200, 1000)
+                    # Normal stock condition
+                    current_qty = random.randint(min_qty + 10, 500)
 
-                inv = Inventory(
+                inventory = Inventory(
                     product_id=product.id,
-                    current_quantity=current_quantity,
-                    minimum_quantity=minimum_quantity,
-                    maximum_quantity=maximum_quantity,
+                    current_quantity=current_qty,
+                    minimum_quantity=min_qty,
+                    maximum_quantity=max_qty
                 )
-                db.add(inv)
-                print(
-                    f"[*] Added inventory for product ID {product.id}: current={current_quantity}, min={minimum_quantity}, max={maximum_quantity}."
+                db.add(inventory)
+                db.commit()
+                logger.info(
+                    "Seeded inventory for Product %s (ID: %d): Qty=%d, Min=%d, Max=%d",
+                    product.sku,
+                    product.id,
+                    current_qty,
+                    min_qty,
+                    max_qty
                 )
-            db.commit()
-            print("[+] Inventory seeding completed.")
+            else:
+                logger.info("Inventory record for Product ID %d already exists, skipping.", product.id)
+                # If we skipped an existing record, check if it counts as low stock
+                if existing.current_quantity <= existing.minimum_quantity:
+                    low_stock_count += 1
         except Exception as e:
             db.rollback()
-            print(f"[-] Error seeding inventory: {e}")
+            logger.error("Failed to seed inventory for Product ID %d: %s", product.id, e)
             raise
 
+
 if __name__ == "__main__":
-    run()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    db = SessionLocal()
+    try:
+        seed_inventory(db)
+    finally:
+        db.close()

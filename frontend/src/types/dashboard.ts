@@ -26,3 +26,30 @@ export interface RecentActivity {
   date: string;
   created_by_name: string;
 }
+
+export interface V2Stats {
+  total_warehouses: number;
+  total_suppliers: number;
+  open_purchase_orders: number;
+  pending_transfers: number;
+  total_inventory_quantity: number;
+  low_stock_count: number;
+}
+
+export interface WarehouseDistribution {
+  warehouse_id: number;
+  warehouse_name: string;
+  total_quantity: number;
+}
+
+export interface POStatusSummary {
+  status: string;
+  count: number;
+  total_value: number;
+}
+
+export interface TransferActivityPoint {
+  date: string;
+  transfers_created: number;
+  transfers_completed: number;
+}
